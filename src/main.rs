@@ -1,25 +1,18 @@
-use std::io::{Read, Write};
-#[allow(unused_imports)]
-use std::net::{
-    TcpListener,
-    TcpStream
+use my_http::tcp::{
+  Client,
+  Listener
 };
+use std::net::SocketAddr;
 
+// https://www.rfc-editor.org/info/rfc7230/#section-3.1.1
 fn main() {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    println!("Logs from your program will appear here!");
+  let socket_addresses: Vec<SocketAddr> = vec![
+    SocketAddr::from(([127, 0, 0, 1], 4221)),
+    SocketAddr::from(([127, 0, 0, 1], 4222)),
+  ];
 
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
-    
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                println!("accepted new connection");
-                stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
-            }
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
-    }
+  let listener_config = Listener::new(socket_addresses).unwrap();
+  let tcp_listener = listener_config.listen().unwrap();
+  
+  Client::handle_clients(tcp_listener);
 }
