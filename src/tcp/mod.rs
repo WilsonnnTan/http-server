@@ -1,26 +1,24 @@
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use std::{io::{Write, Read}, net::{SocketAddr, TcpListener}};
 
 pub struct Listener {
   /// List of addresses to listen on
-  socket_addresses: Vec<SocketAddr>
+  socket_address: SocketAddr
 }
 
 /// Implementation of listener for Tcp
 impl Listener {
-  pub fn new(socket_addresses: Vec<SocketAddr>) -> Result<Self> {
-    ensure!(!socket_addresses.is_empty(), "no socket addresses provided");
-
+  pub fn new(socket_address: SocketAddr) -> Result<Self> {
     Ok(
       Self {
-        socket_addresses: socket_addresses
+        socket_address: socket_address
       }
     )
   }
 
   pub fn listen(&self) -> Result<TcpListener>{
-    TcpListener::bind(self.socket_addresses.as_slice())
-      .with_context(|| format!("failed to bind to {:?}", self.socket_addresses))
+    TcpListener::bind(self.socket_address)
+      .with_context(|| format!("failed to bind to {:?}", self.socket_address))
   }
 }
 
@@ -35,10 +33,21 @@ impl Client {
           println!("accepted new connection");
 
           let mut buf: [u8; 512] = [0; 512];
-          let buf_size = stream.read(&mut buf).unwrap_or(0);
-          println!("accepted {} bytes", buf_size);
+          let mut request_buf: Vec<u8> = Vec::new();
+          loop {
+            let buf_size = stream.read(&mut buf).unwrap_or(0);
+            if buf_size == 0 { break }
+            request_buf.extend(&buf[..buf_size]);
+            println!("accepted {} bytes", buf_size);
 
-          stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
+            if request_buf.windows(4).any(|w| w == b"\r\n\r\n") {
+              break;
+            }
+          }
+
+          use crate::http_1_1::server::Server;
+
+          stream.write_all(Server::handle_request(str::from_utf8(&request_buf).unwrap())).unwrap();
         },
         Err(e) => {
           eprintln!("error: {}", e);
