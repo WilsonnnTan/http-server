@@ -46,8 +46,8 @@ impl Client {
           }
 
           use crate::http_1_1::server::Server;
-
-          stream.write_all(Server::handle_request(str::from_utf8(&request_buf).unwrap())).unwrap();
+          let server = Server::new();
+          stream.write_all(&server.handle_request(str::from_utf8(&request_buf).unwrap())).unwrap();
         },
         Err(e) => {
           eprintln!("error: {}", e);

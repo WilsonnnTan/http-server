@@ -25,11 +25,9 @@ impl<'a> Parser {
       request_str = r;
     }
 
-    // split request by CRLF, first element will always be request-line
-    let splitted_request: Vec<&str> = request_str.split("\r\n").collect();
-    // split request-line by SP (single space)
-    let splitted_request_line: Vec<&str> = splitted_request[0].split_whitespace().collect();
+    // split request by CRLF
+    let parsed_request: Vec<&str> = request_str.split("\r\n").collect();
 
-    splitted_request_line
+    parsed_request
   }
 }
