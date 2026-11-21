@@ -45,6 +45,7 @@ impl<'a> Server {
     write!(response, "HTTP/1.1 {status_code} {status_reason}\r\n")?;
 
     // Build headers and body except for 100, 204, 304 status codes
+    // see: https://www.rfc-editor.org/rfc/rfc9110.html#name-content-length
     match matches!(status_code, 100u16 | 204u16 | 304u16) {
       false => {
         if !response_body.is_empty() {
