@@ -18,6 +18,7 @@ impl<'a> Parser {
   //    and parse a request-line SHOULD ignore at least one empty line (CRLF)
   //    received prior to the request-line.
   /// return spliited request-line for now
+  /// TODO: improve it as the project goes on
   pub(crate) fn parse(mut request_str: &'a str) -> Vec<&'a str> {
     // ===== Parse request-line =====
     // Ignore at least one empty line (CRLF)
