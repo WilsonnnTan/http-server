@@ -10,8 +10,22 @@ pub(crate) struct Server {
 impl<'a> Server {
   pub(crate) fn new() -> Self {
     let status_lookup_table = HashMap::from([
+      (100, "Continue"),
       (200, "OK"),
-      (404, "Not Found")
+      (201, "Created"),
+      (204, "No Content"),
+      (301, "Moved Permanently"),
+      (302, "Found"),
+      (304, "Not Modified"),
+      (400, "Bad Request"),
+      (401, "Unauthorised"),
+      (403, "Forbidden"),
+      (404, "Not Found"),
+      (429, "Too Many Requests"),
+      (500, "Internal Server Error"),
+      (502, "Bad Gateway"),
+      (503, "Service Unavailable"),
+      (504, "Gateway Timeout")
     ]);
 
     Self {
