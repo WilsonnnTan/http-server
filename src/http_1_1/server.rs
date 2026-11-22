@@ -1,4 +1,4 @@
-use super::parser::Parser;
+use super::request::{Request};
 use std::collections::HashMap;
 use std::fmt::Write;
 use anyhow::{Context, Result};
@@ -65,20 +65,20 @@ impl<'a> Server {
     Ok(response)
   }
 
-  pub(crate) fn handle_request(&self, request_str: &'a str) -> Vec<u8> {
+  pub(crate) fn handle_request(&self, request_str: &'a str) -> Result<Vec<u8>> {
     // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
-    let parsed_request = Parser::parse(request_str);
+    let parsed_request = Request::parse(request_str)?;
 
-    // split request-line by SP (single space)
-    let splitted_request_line: Vec<&str> = parsed_request[0].split_whitespace().collect();
-
-    if splitted_request_line[1] == "/" {
-      return self.build_response(200, "").unwrap().into_bytes();
-    } else if let Some(s) = splitted_request_line[1].strip_prefix("/echo/") {
-      return self.build_response(200, s).unwrap().into_bytes();
+    let response: String;
+    if parsed_request.path == "/" {
+      response = self.build_response(200, parsed_request.body)?;
+    } else if let Some(s) = parsed_request.path.strip_prefix("/echo/") {
+      response = self.build_response(200, s)?;
     } else {
-      return self.build_response(404, "").unwrap().into_bytes();
+      response = self.build_response(404, parsed_request.body)?;
     }
+
+    Ok(response.into_bytes())
   }
 }
 

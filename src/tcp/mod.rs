@@ -26,7 +26,7 @@ impl Listener {
 pub struct Client;
 
 impl Client {
-  pub fn handle_clients(listener: TcpListener) {
+  pub fn handle_clients(listener: TcpListener) -> Result<()> {
     for stream in listener.incoming() {
       match stream {
         Ok(mut stream) => {
@@ -47,12 +47,14 @@ impl Client {
 
           use crate::http_1_1::server::Server;
           let server = Server::new();
-          stream.write_all(&server.handle_request(str::from_utf8(&request_buf).unwrap())).unwrap();
+          stream.write_all(&server.handle_request(str::from_utf8(&request_buf)?)?)?;
         },
         Err(e) => {
           eprintln!("error: {}", e);
         }
       }
     }
+
+    Ok(())
   }
 }
