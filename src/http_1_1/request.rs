@@ -38,14 +38,14 @@ pub(crate) struct Request<'a> {
   /// HTTP request path
   pub(crate) path: &'a str,
   /// HTTP headers
-  pub(crate) headers: HashMap<&'a str, &'a str>,
+  pub(crate) headers: HashMap<String, &'a str>,
   /// HTTP body
   pub(crate) body: &'a str,
 }
 
 /// Request FromStr implementation
 impl<'a> Request<'a> {
-  // HTTP/1.1 format: https://www.rfc-editor.org/info/rfc7230/
+  // HTTP/1.1 format: https://www.rfc-editor.org/info/rfc9110
   /// Returns request object wrapped in anyhow::Result
   /// that is parsed from incoming HTTP/1.1 request
   pub(crate) fn parse(mut request_str: &'a str) -> Result<Self> {
@@ -69,13 +69,13 @@ impl<'a> Request<'a> {
     let request_path = splitted_request_line[1];
 
     // Parse headers
-    let mut parsed_headers: HashMap<&str, &str> = HashMap::new();
+    let mut parsed_headers: HashMap<String, &str> = HashMap::new();
     let splitted_headers: Vec<&str> = headers.split("\r\n").collect();
     for header in splitted_headers {
       let Some((field, value)) = header.split_once(":")
       else { bail!("failed to parse HTTP request.") }; // 400 BAD REQUEST
 
-      parsed_headers.insert(field, value.trim());
+      parsed_headers.insert(field.to_lowercase(), value.trim());
     }
 
     Ok(
@@ -111,11 +111,11 @@ mod tests {
         method: Method::POST,
         path: "/",
         headers: HashMap::from([
-                  ("Host", "localhost:4222"),
-                  ("User-Agent", "curl/8.22.0"),
-                  ("Accept", "*/*"),
-                  ("Content-Length", "2"),
-                  ("Content-Type", "application/x-www-form-urlencoded"),
+                  ("host".to_string(), "localhost:4222"),
+                  ("user-agent".to_string(), "curl/8.22.0"),
+                  ("accept".to_string(), "*/*"),
+                  ("content-length".to_string(), "2"),
+                  ("content-type".to_string(), "application/x-www-form-urlencoded"),
                 ]),
         body: "hi",
       }
