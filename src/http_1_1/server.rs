@@ -66,12 +66,21 @@ impl<'a> Server {
   }
 
   pub(crate) fn handle_request(&self, request_str: &'a str) -> Result<Vec<u8>> {
-    // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
-    let parsed_request = Request::parse(request_str)?;
-
     let response: String;
+
+    let parsed_request = match Request::parse(request_str) {
+      Ok(req) => req,
+      Err(e) => {
+        eprintln!("{}", e);
+        response = self.build_response(400, "")?;
+        return Ok(response.into_bytes()); // 400 BAD REQUEST
+      },
+    };
+
     if parsed_request.path == "/" {
       response = self.build_response(200, parsed_request.body)?;
+    } else if parsed_request.path == "/user-agent" {
+      response = self.build_response(200, parsed_request.headers["User-Agent"])?;
     } else if let Some(s) = parsed_request.path.strip_prefix("/echo/") {
       response = self.build_response(200, s)?;
     } else {
@@ -154,6 +163,20 @@ mod tests {
         server.build_response(200, "abc").unwrap(),
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc"
       )
+    }
+  }
+
+  mod request_handler_tests {
+    use super::super::Server;
+
+    #[test]
+    fn failed_to_parse_test() {
+      let server = Server::new();
+      // Failed on checking double CRLF
+      assert_eq!(
+        server.handle_request("GET / HTTP/1.1\r\n").unwrap(),
+        b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"
+      );
     }
   }
 }

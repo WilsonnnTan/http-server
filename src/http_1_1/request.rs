@@ -64,6 +64,8 @@ impl<'a> Request<'a> {
 
 
     // Parse request_line
+    // TODO: handle edge case for verifying request_line format
+    // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
     let splitted_request_line: Vec<&str> = request_line.split(" ").collect();
     let request_method: Method = Method::from_str(splitted_request_line[0])?;
     let request_path = splitted_request_line[1];
@@ -120,5 +122,27 @@ mod tests {
         body: "hi",
       }
     );
+  }
+
+  #[test]
+  /// Test to handle Bad Request gracefully
+  fn http_1_1_failed_parse_test() {
+    // Failed on checking double CRLF
+    assert!(Request::parse("GET / HTTP/1.1\r\n").is_err());
+
+    // Failed on no delimiter between request-line and headers
+    assert!(Request::parse("GET / HTTP/1.1 Content-Length: 0\r\n\r\n").is_err());
+
+    // Failed on headers field and value format (delimited by ':')
+    assert!(Request::parse("GET / HTTP/1.1\r\nContent-Length=0\r\n\r\n").is_err());
+
+    // NOTE: uncomment this after implement request-line verifier
+    // // Failed on missing request-line
+    // assert!(Request::parse("\r\nContent-Length: 0\r\nContent-Type: text/plain\r\n\r\n").is_err());
+
+    // // Failed on bad request-line format
+    // assert!(Request::parse("GET/tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
+    // assert!(Request::parse("GET /tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
+    // assert!(Request::parse("GET/tes HTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
   }
 }
