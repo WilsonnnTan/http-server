@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::{io::{Write, Read}, net::{SocketAddr, TcpListener}};
+use std::{io::{Write, Read}, net::{SocketAddr, TcpListener}, thread};
 
 pub struct Listener {
   /// List of addresses to listen on
@@ -31,23 +31,24 @@ impl Client {
       match stream {
         Ok(mut stream) => {
           println!("accepted new connection");
+          thread::spawn(move || {
+            let mut buf: [u8; 512] = [0; 512];
+            let mut request_buf: Vec<u8> = Vec::new();
+            loop {
+              let buf_size = stream.read(&mut buf).unwrap_or(0);
+              if buf_size == 0 { break }
+              request_buf.extend(&buf[..buf_size]);
+              println!("accepted {} bytes", buf_size);
 
-          let mut buf: [u8; 512] = [0; 512];
-          let mut request_buf: Vec<u8> = Vec::new();
-          loop {
-            let buf_size = stream.read(&mut buf).unwrap_or(0);
-            if buf_size == 0 { break }
-            request_buf.extend(&buf[..buf_size]);
-            println!("accepted {} bytes", buf_size);
-
-            if request_buf.windows(4).any(|w| w == b"\r\n\r\n") {
-              break;
+              if request_buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                break;
+              }
             }
-          }
 
-          use crate::http_1_1::server::Server;
-          let server = Server::new();
-          stream.write_all(&server.handle_request(str::from_utf8(&request_buf)?)?)?;
+            use crate::http_1_1::server::Server;
+            let server = Server::new();
+            stream.write_all(&server.handle_request(str::from_utf8(&request_buf).unwrap()).unwrap()).unwrap();
+          });
         },
         Err(e) => {
           eprintln!("error: {}", e);
