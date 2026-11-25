@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use my_http::tcp::{Client, Listener};
     use reqwest::{header, StatusCode};
-    use std::net::SocketAddr;
+    use std::process;
 
     #[tokio::test]
     async fn request_with_http_1_1_test() {
-        let listener_config = Listener::new(SocketAddr::from(([127, 0, 0, 1], 4222))).unwrap();
-        let tcp_listener = listener_config.listen().unwrap();
-        std::thread::spawn(|| Client::handle_clients(tcp_listener, ""));
+        let mut child = process::Command::new(env!("CARGO_BIN_EXE_http-server"))
+            .args(["--directory", "temp/"])
+            .spawn()
+            .expect("Failed to spawn HTTP server.");
 
         let (r1, r2, r3) = tokio::join!(
             reqwest::get("http://127.0.0.1:4222"),
@@ -28,5 +28,8 @@ mod tests {
         assert_eq!(r3.status(), StatusCode::OK);
         assert_eq!(r3.headers()[header::CONTENT_TYPE], "text/plain");
         assert_eq!(r3.headers()[header::CONTENT_LENGTH], "7");
+
+        child.kill().expect("Failed to kill HTTP server.");
+        child.wait().expect("Failed to wait on server");
     }
 }
