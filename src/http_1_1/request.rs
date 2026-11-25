@@ -1,106 +1,102 @@
-use std::{
-  collections::HashMap,
-  str::FromStr,
-};
-use anyhow::{Result, bail};
-
+use anyhow::{bail, Result};
+use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, PartialEq, Eq)]
 /// HTTP/1.1 request methods
-pub (crate) enum Method {
-  GET,
-  POST,
-  PATCH,
-  PUT,
-  DELETE,
+pub(crate) enum Method {
+    GET,
+    POST,
+    PATCH,
+    PUT,
+    DELETE,
 }
 
 /// FromStr implementation to parse str into Method enum
 impl FromStr for Method {
-  type Err = anyhow::Error;
+    type Err = anyhow::Error;
 
-  fn from_str(s: &str) -> Result<Self>{
-    match s {
-      "GET" => Ok(Method::GET),
-      "POST" => Ok(Method::POST),
-      "PATCH" => Ok(Method::PATCH),
-      "PUT" => Ok(Method::PUT),
-      "DELETE" =>  Ok(Method::DELETE),
-      other => bail!("Unsupported method: {}", other),
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "GET" => Ok(Method::GET),
+            "POST" => Ok(Method::POST),
+            "PATCH" => Ok(Method::PATCH),
+            "PUT" => Ok(Method::PUT),
+            "DELETE" => Ok(Method::DELETE),
+            other => bail!("Unsupported method: {}", other),
+        }
     }
-  }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Request<'a> {
-  /// HTTP request method
-  pub(crate) method: Method,
-  /// HTTP request path
-  pub(crate) path: &'a str,
-  /// HTTP headers
-  pub(crate) headers: HashMap<String, &'a str>,
-  /// HTTP body
-  pub(crate) body: &'a str,
+    /// HTTP request method
+    pub(crate) method: Method,
+    /// HTTP request path
+    pub(crate) path: &'a str,
+    /// HTTP headers
+    pub(crate) headers: HashMap<String, &'a str>,
+    /// HTTP body
+    pub(crate) body: &'a str,
 }
 
 /// Request FromStr implementation
 impl<'a> Request<'a> {
-  // HTTP/1.1 format: https://www.rfc-editor.org/info/rfc9110
-  /// Returns request object wrapped in anyhow::Result
-  /// that is parsed from incoming HTTP/1.1 request
-  pub(crate) fn parse(mut request_str: &'a str) -> Result<Self> {
-    // Ignore at least one empty line (CRLF)
-    if let Some(r) = request_str.strip_prefix("\r\n") {
-      request_str = r;
+    // HTTP/1.1 format: https://www.rfc-editor.org/info/rfc9110
+    /// Returns request object wrapped in anyhow::Result
+    /// that is parsed from incoming HTTP/1.1 request
+    pub(crate) fn parse(mut request_str: &'a str) -> Result<Self> {
+        // Ignore at least one empty line (CRLF)
+        if let Some(r) = request_str.strip_prefix("\r\n") {
+            request_str = r;
+        }
+
+        // Split body from request_str by double CRLF (end of headers)
+        let Some((reqline_and_headers, body)) = request_str.split_once("\r\n\r\n") else {
+            bail!("failed to parse HTTP request.")
+        }; // 400 BAD REQUEST
+
+        // Split request line and headers by single CRLF
+        let Some((request_line, headers)) = reqline_and_headers.split_once("\r\n") else {
+            bail!("failed to parse HTTP request.")
+        }; // 400 BAD REQUEST
+
+        // Parse request_line
+        // TODO: handle edge case for verifying request_line format
+        // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
+        let splitted_request_line: Vec<&str> = request_line.split(" ").collect();
+        let request_method: Method = Method::from_str(splitted_request_line[0])?;
+        let request_path = splitted_request_line[1];
+
+        // Parse headers
+        let mut parsed_headers: HashMap<String, &str> = HashMap::new();
+        let splitted_headers: Vec<&str> = headers.split("\r\n").collect();
+        for header in splitted_headers {
+            let Some((field, value)) = header.split_once(":") else {
+                bail!("failed to parse HTTP request.")
+            }; // 400 BAD REQUEST
+
+            parsed_headers.insert(field.to_lowercase(), value.trim());
+        }
+
+        Ok(Self {
+            method: request_method,
+            path: request_path,
+            headers: parsed_headers,
+            body: body,
+        })
     }
-
-    // Split body from request_str by double CRLF (end of headers)
-    let Some((reqline_and_headers, body)) = request_str.split_once("\r\n\r\n")
-    else { bail!("failed to parse HTTP request.") }; // 400 BAD REQUEST
-
-    // Split request line and headers by single CRLF
-    let Some((request_line, headers)) = reqline_and_headers.split_once("\r\n")
-    else { bail!("failed to parse HTTP request.") }; // 400 BAD REQUEST
-
-
-    // Parse request_line
-    // TODO: handle edge case for verifying request_line format
-    // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
-    let splitted_request_line: Vec<&str> = request_line.split(" ").collect();
-    let request_method: Method = Method::from_str(splitted_request_line[0])?;
-    let request_path = splitted_request_line[1];
-
-    // Parse headers
-    let mut parsed_headers: HashMap<String, &str> = HashMap::new();
-    let splitted_headers: Vec<&str> = headers.split("\r\n").collect();
-    for header in splitted_headers {
-      let Some((field, value)) = header.split_once(":")
-      else { bail!("failed to parse HTTP request.") }; // 400 BAD REQUEST
-
-      parsed_headers.insert(field.to_lowercase(), value.trim());
-    }
-
-    Ok(
-      Self {
-        method: request_method,
-        path: request_path,
-        headers: parsed_headers,
-        body: body,
-      }
-    )
-  }
 }
-
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+    use super::*;
 
-  #[test]
-  /// Test parser to successfully parse status-line, headers, and body
-  fn http_1_1_parse_test() {
-    assert_eq!(
-      Request::parse("POST / HTTP/1.1\r\n\
+    #[test]
+    /// Test parser to successfully parse status-line, headers, and body
+    fn http_1_1_parse_test() {
+        assert_eq!(
+            Request::parse(
+                "POST / HTTP/1.1\r\n\
         Host: localhost:4222\r\n\
         User-Agent: curl/8.22.0\r\n\
         Accept: */*\r\n\
@@ -108,41 +104,45 @@ mod tests {
         Content-Type: application/x-www-form-urlencoded\r\n\
         \r\n\
         hi"
-      ).unwrap(),
-      Request {
-        method: Method::POST,
-        path: "/",
-        headers: HashMap::from([
-                  ("host".to_string(), "localhost:4222"),
-                  ("user-agent".to_string(), "curl/8.22.0"),
-                  ("accept".to_string(), "*/*"),
-                  ("content-length".to_string(), "2"),
-                  ("content-type".to_string(), "application/x-www-form-urlencoded"),
+            )
+            .unwrap(),
+            Request {
+                method: Method::POST,
+                path: "/",
+                headers: HashMap::from([
+                    ("host".to_string(), "localhost:4222"),
+                    ("user-agent".to_string(), "curl/8.22.0"),
+                    ("accept".to_string(), "*/*"),
+                    ("content-length".to_string(), "2"),
+                    (
+                        "content-type".to_string(),
+                        "application/x-www-form-urlencoded"
+                    ),
                 ]),
-        body: "hi",
-      }
-    );
-  }
+                body: "hi",
+            }
+        );
+    }
 
-  #[test]
-  /// Test to handle Bad Request gracefully
-  fn http_1_1_failed_parse_test() {
-    // Failed on checking double CRLF
-    assert!(Request::parse("GET / HTTP/1.1\r\n").is_err());
+    #[test]
+    /// Test to handle Bad Request gracefully
+    fn http_1_1_failed_parse_test() {
+        // Failed on checking double CRLF
+        assert!(Request::parse("GET / HTTP/1.1\r\n").is_err());
 
-    // Failed on no delimiter between request-line and headers
-    assert!(Request::parse("GET / HTTP/1.1 Content-Length: 0\r\n\r\n").is_err());
+        // Failed on no delimiter between request-line and headers
+        assert!(Request::parse("GET / HTTP/1.1 Content-Length: 0\r\n\r\n").is_err());
 
-    // Failed on headers field and value format (delimited by ':')
-    assert!(Request::parse("GET / HTTP/1.1\r\nContent-Length=0\r\n\r\n").is_err());
+        // Failed on headers field and value format (delimited by ':')
+        assert!(Request::parse("GET / HTTP/1.1\r\nContent-Length=0\r\n\r\n").is_err());
 
-    // NOTE: uncomment this after implement request-line verifier
-    // // Failed on missing request-line
-    // assert!(Request::parse("\r\nContent-Length: 0\r\nContent-Type: text/plain\r\n\r\n").is_err());
+        // NOTE: uncomment this after implement request-line verifier
+        // // Failed on missing request-line
+        // assert!(Request::parse("\r\nContent-Length: 0\r\nContent-Type: text/plain\r\n\r\n").is_err());
 
-    // // Failed on bad request-line format
-    // assert!(Request::parse("GET/tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
-    // assert!(Request::parse("GET /tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
-    // assert!(Request::parse("GET/tes HTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
-  }
+        // // Failed on bad request-line format
+        // assert!(Request::parse("GET/tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
+        // assert!(Request::parse("GET /tesHTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
+        // assert!(Request::parse("GET/tes HTTP/1.1\r\nContent-Length: 0\r\n\r\n").is_err());
+    }
 }
