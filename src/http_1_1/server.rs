@@ -39,8 +39,7 @@ impl<'a> Server {
     }
 
     fn get_file_content(directory: &str, file_path: &str) -> Result<Option<String>> {
-        let mut full_path = PathBuf::new();
-        full_path.push(directory);
+        let mut full_path = PathBuf::from(directory);
         full_path.push(file_path);
 
         let mut content = String::new();
@@ -59,7 +58,12 @@ impl<'a> Server {
     }
 
     /// Build HTTP response with text/plain as content-type default
-    fn build_response(&self, status_code: u16, response_body: &'a str) -> Result<String> {
+    fn build_response(
+        &self,
+        status_code: u16,
+        response_body: &'a str,
+        is_octet: bool,
+    ) -> Result<String> {
         let mut response = String::with_capacity(96 + response_body.len());
 
         // Build status line
@@ -73,9 +77,11 @@ impl<'a> Server {
         // Build headers and body except for 100, 204, 304 status codes
         // see: https://www.rfc-editor.org/rfc/rfc9110.html#name-content-length
         if !matches!(status_code, 100u16 | 204u16 | 304u16) {
-            if !response_body.is_empty() {
+            if !response_body.is_empty() & !is_octet {
                 // default content-type to text/plain
                 response.push_str("Content-Type: text/plain\r\n");
+            } else if !response_body.is_empty() & is_octet {
+                response.push_str("Content-Type: application/octet-stream\r\n");
             }
             // keep sending content-length even if it is 0
             response.push_str(&format!("Content-Length: {}\r\n", response_body.len()));
@@ -95,7 +101,7 @@ impl<'a> Server {
             Ok(req) => req,
             Err(e) => {
                 eprintln!("{}", e);
-                response = self.build_response(400, "")?;
+                response = self.build_response(400, "", false)?;
                 return Ok(response.into_bytes()); // 400 BAD REQUEST
             }
         };
@@ -103,22 +109,22 @@ impl<'a> Server {
         let path = parsed_request.path;
 
         match path {
-            "/" => response = self.build_response(200, parsed_request.body)?,
+            "/" => response = self.build_response(200, parsed_request.body, false)?,
             "/user-agent" => {
-                response = self.build_response(200, parsed_request.headers["User-Agent"])?
+                response = self.build_response(200, parsed_request.headers["User-Agent"], false)?
             }
             _ if let Some(body) = path.strip_prefix("/echo/") => {
-                response = self.build_response(200, body)?;
+                response = self.build_response(200, body, false)?;
             }
             _ if let Some(file_path) = path.strip_prefix("/files/") => {
                 let content = Self::get_file_content(directory, file_path);
                 match content {
-                    Ok(Some(c)) => response = self.build_response(200, c.as_str())?,
-                    Ok(None) => response = self.build_response(404, "")?,
-                    Err(_) => response = self.build_response(500, "")?,
+                    Ok(Some(c)) => response = self.build_response(200, c.as_str(), true)?,
+                    Ok(None) => response = self.build_response(404, "", false)?,
+                    Err(_) => response = self.build_response(500, "", false)?,
                 }
             }
-            _ => response = self.build_response(404, parsed_request.body)?,
+            _ => response = self.build_response(404, parsed_request.body, false)?,
         }
 
         Ok(response.into_bytes())
@@ -156,7 +162,7 @@ mod tests {
             let server = Server::new();
 
             for (status_code, status_reason) in status_lookup_table.into_iter() {
-                let response = server.build_response(status_code, "").unwrap();
+                let response = server.build_response(status_code, "", false).unwrap();
                 assert!(
                     response.contains(&format!("HTTP/1.1 {} {}\r\n", status_code, status_reason))
                 );
@@ -176,7 +182,7 @@ mod tests {
 
             for (status_code, status_reason) in status_lookup_table.into_iter() {
                 assert_eq!(
-                    server.build_response(status_code, "").unwrap(),
+                    server.build_response(status_code, "", false).unwrap(),
                     format!("HTTP/1.1 {} {}\r\n", status_code, status_reason)
                 );
             }
@@ -187,7 +193,7 @@ mod tests {
         /// Test for unavailable status code
         fn unavailable_status_code_test() {
             let server = Server::new();
-            server.build_response(1001, "").unwrap();
+            server.build_response(1001, "", false).unwrap();
         }
 
         #[test]
@@ -195,7 +201,7 @@ mod tests {
         fn response_builder_test() {
             let server = Server::new();
             assert_eq!(
-                server.build_response(200, "abc").unwrap(),
+                server.build_response(200, "abc", false).unwrap(),
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc"
             )
         }
