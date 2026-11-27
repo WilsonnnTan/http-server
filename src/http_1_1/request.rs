@@ -31,8 +31,8 @@ impl FromStr for Method {
 pub(crate) struct Request<'a> {
     /// HTTP request method
     pub(crate) method: Method,
-    /// HTTP request path
-    pub(crate) path: &'a str,
+    /// HTTP request route
+    pub(crate) route: &'a str,
     /// HTTP headers
     pub(crate) headers: HashMap<String, &'a str>,
     /// HTTP body
@@ -65,7 +65,7 @@ impl<'a> Request<'a> {
         // TODO: handle four type of request target format https://datatracker.ietf.org/doc/html/rfc9112#section-3.2
         let splitted_request_line: Vec<&str> = request_line.split(" ").collect();
         let request_method: Method = Method::from_str(splitted_request_line[0])?;
-        let request_path = splitted_request_line[1];
+        let request_route = splitted_request_line[1];
 
         // Parse headers
         let mut parsed_headers: HashMap<String, &str> = HashMap::new();
@@ -80,7 +80,7 @@ impl<'a> Request<'a> {
 
         Ok(Self {
             method: request_method,
-            path: request_path,
+            route: request_route,
             headers: parsed_headers,
             body: body,
         })
@@ -108,7 +108,7 @@ mod tests {
             .unwrap(),
             Request {
                 method: Method::POST,
-                path: "/",
+                route: "/",
                 headers: HashMap::from([
                     ("host".to_string(), "localhost:4222"),
                     ("user-agent".to_string(), "curl/8.22.0"),

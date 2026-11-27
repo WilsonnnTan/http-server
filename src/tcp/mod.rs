@@ -51,11 +51,10 @@ impl Client {
                             }
                         }
 
-                        let server = Server::new();
                         stream
                             .write_all(
-                                &server
-                                    .handle_request(str::from_utf8(&request_buf).unwrap(), &dir)
+                                &Server::
+                                    handle_request(str::from_utf8(&request_buf).unwrap(), &dir)
                                     .unwrap(),
                             )
                             .unwrap();
