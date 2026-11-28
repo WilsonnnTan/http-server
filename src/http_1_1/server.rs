@@ -1,8 +1,8 @@
-use super::request::Request;
+use super::request::{Request, Method};
 use super::response::Response;
 use anyhow::{Result};
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{ErrorKind, Read},
     path::PathBuf,
 };
@@ -22,11 +22,25 @@ impl<'a> Server {
                 return Ok(Some(content));
             }
             Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                return Err(e.into());
-            }
+            Err(e) => return Err(e.into())
         }
+    }
+
+
+    /// Write request's content into a file
+    /// Returns either Result<true> or Err(_)
+    fn write_file_content(directory: &str, file_path: &str, content: &str) -> Result<bool> {
+        let mut full_path = PathBuf::from(directory);
+        full_path.push(file_path);
+
+        // create missing parent dir
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::write(full_path, content)?;
+
+        Ok(true)
     }
 
 
@@ -60,34 +74,42 @@ impl<'a> Server {
 
 
     /// Handles method and route that returns (status_code, response_body, is_octet)
-    fn route(request: &Request, directory: &str) -> (u16, String, bool){
+    fn route(request: &Request, directory: &str) -> (u16, String, bool) {
         let empty = |status_code: u16| (status_code, String::new(), false);
 
-        match request.route {
-            "/" => empty(200),
-            "/user-agent" => {
+        match (&request.method, request.route) {
+            (Method::GET, "/") => empty(200),
+            (Method::GET, "/user-agent") => {
                 match request.headers.get("User-Agent") {
                     Some(&user_agent) => (200, user_agent.to_string(), false),
                     None => empty(400)
                 }
             },
-            route if let Some(body) = route.strip_prefix("/echo/") => {
+            (Method::GET, route) if let Some(body) = route.strip_prefix("/echo/") => {
                 (200, body.to_string(), false)
             },
-            route if let Some(file_path) = route.strip_prefix("/files/") => {
+            (Method::GET, route) if let Some(file_path) = route.strip_prefix("/files/") => {
                 let content = Self::get_file_content(directory, file_path);
                 match content {
                     Ok(Some(c)) => (200, c, true),
                     Ok(None) => empty(404),
-                    Err(_) => empty(500),
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        empty(500)
+                    }
+                }
+            },
+            (Method::POST, route) if let Some(file_path) = route.strip_prefix("/files/") => {
+                let content = Self::write_file_content(directory, file_path, request.body);
+                match content {
+                    Ok(_) => (201, String::new(), true), // 
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        empty(500)
+                    }
                 }
             },
             _ => empty(404),
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    
 }
